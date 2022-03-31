@@ -1,0 +1,11 @@
+*/node_modules/*
+**/.terraform/*
+**/.terraform.lock.hcl
+**/secrets.tfvars
+*.tfstate
+*.tfstate.*
+.tmp
+.DS_Store
+.DS_Store?
+.terraformrc
+terraform.rc
