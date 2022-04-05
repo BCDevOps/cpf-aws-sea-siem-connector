@@ -16,7 +16,7 @@ data "aws_ssm_parameter" "kms_arn" {
 }
 
 resource "aws_s3_bucket" "log_connector_lambda_bucket" {
-  bucket        = "siem-log-connector-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}"
+  bucket = "siem-log-connector-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}"
 }
 
 resource "random_uuid" "lambda_src_hash" {
@@ -45,14 +45,14 @@ data "archive_file" "lambda_log_connector" {
 
   source_dir  = local.lambda_src_path
   output_path = "${path.module}/.tmp/${random_uuid.lambda_src_hash.result}.zip"
-  depends_on = [null_resource.install_dependencies]
+  depends_on  = [null_resource.install_dependencies]
 }
 
 resource "aws_s3_object" "lambda_log_connector" {
   bucket = aws_s3_bucket.log_connector_lambda_bucket.id
   key    = "lambda.zip"
   source = data.archive_file.lambda_log_connector.output_path
-  etag = filemd5(data.archive_file.lambda_log_connector.output_path)
+  etag   = filemd5(data.archive_file.lambda_log_connector.output_path)
 }
 
 resource "aws_lambda_function" "log_connector" {
@@ -150,29 +150,20 @@ resource "aws_iam_role_policy_attachment" "test-attach" {
 
 
 data "aws_s3_bucket" "trigger" {
-  bucket = var.triggerbucket1
+  for_each = var.trigger_bucket
+  bucket   = each.value
 }
-data "aws_s3_bucket" "trigger1" {
-  bucket = var.triggerbucket2
-}
-
 resource "aws_lambda_permission" "allow_bucket" {
-  statement_id  = "AllowExecutionFromS3Bucket"
+  for_each      = var.trigger_bucket
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.log_connector.arn
   principal     = "s3.amazonaws.com"
-  source_arn    = data.aws_s3_bucket.trigger.arn
+  source_arn    = data.aws_s3_bucket.trigger[each.key].arn
 }
-resource "aws_lambda_permission" "allow_bucket1" {
-  statement_id  = "AllowExecutionFromS3Bucket1"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.log_connector.arn
-  principal     = "s3.amazonaws.com"
-  source_arn    = data.aws_s3_bucket.trigger1.arn
-}
-resource "aws_s3_bucket_notification" "bucket_notification" {
-  bucket = data.aws_s3_bucket.trigger.id
 
+resource "aws_s3_bucket_notification" "bucket_notification" {
+  for_each = var.trigger_bucket
+  bucket   = data.aws_s3_bucket.trigger[each.key].id
   lambda_function {
     lambda_function_arn = aws_lambda_function.log_connector.arn
     events              = ["s3:ObjectCreated:*"]
@@ -180,15 +171,4 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
   }
 
   depends_on = [aws_lambda_permission.allow_bucket]
-}
-resource "aws_s3_bucket_notification" "bucket_notification1" {
-  bucket = data.aws_s3_bucket.trigger1.id
-
-  lambda_function {
-    lambda_function_arn = aws_lambda_function.log_connector.arn
-    events              = ["s3:ObjectCreated:*"]
-
-  }
-
-  depends_on = [aws_lambda_permission.allow_bucket1]
 }
